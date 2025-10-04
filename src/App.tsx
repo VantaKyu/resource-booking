@@ -12,16 +12,16 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 /**
- * MMCM Resource Booking App â€” Local-Hosted (Frontend MVP)
+ * MMCM Resource Booking App — Local-Hosted (Frontend MVP)
  * ------------------------------------------------------
  * - One-file React component you can drop into a Vite/Next.js app.
  * - Tailwind CSS for styling, shadcn/ui for components, lucide-react for icons.
  * - Contains:
- *    â€¢ Top navigation with search & filters
- *    â€¢ Tabs for Resources (Vehicles, Facilities, Equipment)
- *    â€¢ Resource cards with availability status
- *    â€¢ Booking Sheet (form) with the four statuses you defined: REQUEST, ONGOING, SUCCESS, CANCEL
- *    â€¢ "My Bookings" panel with tabs
+ *    • Top navigation with search & filters
+ *    • Tabs for Resources (Vehicles, Facilities, Equipment)
+ *    • Resource cards with availability status
+ *    • Booking Sheet (form) with the four statuses you defined: REQUEST, ONGOING, SUCCESS, CANCEL
+ *    • "My Bookings" panel with tabs
  * - Data is mocked in-memory for now; wire to your backend later.
  */
 
@@ -56,31 +56,31 @@ const FACILITIES = [
 const EQUIPMENT = {
   Furniture: {
     Chairs: [
-      { id: "eq-ch-rabami", name: "Chair â€“ Rabami", total: 50, available: 44 },
-      { id: "eq-ch-monobloc", name: "Chair â€“ Monobloc", total: 100, available: 72 },
-      { id: "eq-ch-stool", name: "Chair â€“ Stool", total: 30, available: 25 },
+      { id: "eq-ch-rabami", name: "Chair – Rabami", total: 50, available: 44 },
+      { id: "eq-ch-monobloc", name: "Chair – Monobloc", total: 100, available: 72 },
+      { id: "eq-ch-stool", name: "Chair – Stool", total: 30, available: 25 },
     ],
     Tables: [
-      { id: "eq-tb-trapezoid", name: "Table â€“ Trapezoid", total: 10, available: 8 },
-      { id: "eq-tb-training", name: "Table â€“ Training (Long)", total: 12, available: 12 },
-      { id: "eq-tb-round-s", name: "Table â€“ Round (Small)", total: 10, available: 7 },
-      { id: "eq-tb-round-b", name: "Table â€“ Round (Big)", total: 6, available: 5 },
-      { id: "eq-tb-fold-s", name: "Table â€“ Foldable (Small)", total: 15, available: 10 },
-      { id: "eq-tb-cocktail", name: "Table â€“ Cocktail", total: 8, available: 6 },
+      { id: "eq-tb-trapezoid", name: "Table – Trapezoid", total: 10, available: 8 },
+      { id: "eq-tb-training", name: "Table – Training (Long)", total: 12, available: 12 },
+      { id: "eq-tb-round-s", name: "Table – Round (Small)", total: 10, available: 7 },
+      { id: "eq-tb-round-b", name: "Table – Round (Big)", total: 6, available: 5 },
+      { id: "eq-tb-fold-s", name: "Table – Foldable (Small)", total: 15, available: 10 },
+      { id: "eq-tb-cocktail", name: "Table – Cocktail", total: 8, available: 6 },
     ],
   },
   "Audio/Visual": {
     Devices: [
       { id: "eq-tv", name: "TV", total: 6, available: 4 },
-      { id: "eq-pc-win", name: "Computer â€“ Windows", total: 12, available: 9 },
-      { id: "eq-pc-mac", name: "Computer â€“ Mac", total: 5, available: 3 },
+      { id: "eq-pc-win", name: "Computer – Windows", total: 12, available: 9 },
+      { id: "eq-pc-mac", name: "Computer – Mac", total: 5, available: 3 },
       { id: "eq-projector", name: "Projector", total: 7, available: 5 },
     ],
     Audio: [
-      { id: "eq-mic-wired", name: "Microphone â€“ Wired", total: 20, available: 16 },
-      { id: "eq-mic-wireless", name: "Microphone â€“ Wireless", total: 12, available: 8 },
-      { id: "eq-spk-s", name: "Portable Speaker â€“ Small", total: 6, available: 5 },
-      { id: "eq-spk-b", name: "Portable Speaker â€“ Big", total: 4, available: 3 },
+      { id: "eq-mic-wired", name: "Microphone – Wired", total: 20, available: 16 },
+      { id: "eq-mic-wireless", name: "Microphone – Wireless", total: 12, available: 8 },
+      { id: "eq-spk-s", name: "Portable Speaker – Small", total: 6, available: 5 },
+      { id: "eq-spk-b", name: "Portable Speaker – Big", total: 4, available: 3 },
     ],
   },
   Accessories: {
@@ -215,7 +215,7 @@ export default function MMCMResourceBookingApp() {
           <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vehicles, rooms, equipmentâ€¦" className="pl-9" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vehicles, rooms, equipment…" className="pl-9" />
             </div>
             <Button variant="outline" className="hidden sm:inline-flex"><Filter className="h-4 w-4 mr-2"/>Filters</Button>
             <Button onClick={() => setOpenSheet(true)} className="gap-2"><Plus className="h-4 w-4"/> New Booking</Button>
@@ -243,7 +243,7 @@ export default function MMCMResourceBookingApp() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-medium">{v.name}</h3>
-                          <p className="text-sm text-muted-foreground">Plate: {v.plate} â€¢ Seats: {v.seats}</p>
+                          <p className="text-sm text-muted-foreground">Plate: {v.plate} • Seats: {v.seats}</p>
                         </div>
                         <Badge className={cn("border-none", STATUS_COLORS[v.status as keyof typeof STATUS_COLORS])}>{v.status}</Badge>
                       </div>
@@ -265,7 +265,7 @@ export default function MMCMResourceBookingApp() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-medium">{f.name}</h3>
-                          <p className="text-sm text-muted-foreground">Capacity & details â€” TBD</p>
+                          <p className="text-sm text-muted-foreground">Capacity & details — TBD</p>
                         </div>
                         <Badge className={cn("border-none", STATUS_COLORS[f.status as keyof typeof STATUS_COLORS])}>{f.status}</Badge>
                       </div>
@@ -300,7 +300,7 @@ export default function MMCMResourceBookingApp() {
 
         {/* Right: My Bookings & Status Tabs */}
         <section className="lg:col-span-1">
-          <SectionHeader icon={Clock4} title="My Bookings" subtitle="Track Request â†’ Ongoing â†’ Success â†’ Cancel" />
+          <SectionHeader icon={Clock4} title="My Bookings" subtitle="Track Request → Ongoing → Success → Cancel" />
           <Tabs defaultValue="REQUEST" className="mt-4">
             <TabsList className="grid grid-cols-4">
               <TabsTrigger value="REQUEST">Request</TabsTrigger>
@@ -322,7 +322,7 @@ export default function MMCMResourceBookingApp() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-medium">{b.resourceName} <span className="text-muted-foreground">({b.kind})</span></p>
-                            <p className="text-xs text-muted-foreground">{new Date(b.start).toLocaleString()} â€” {new Date(b.end).toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(b.start).toLocaleString()} — {new Date(b.end).toLocaleString()}</p>
                           </div>
                           <div className="flex items-center gap-2">
                             {status === "REQUEST" && (
@@ -347,7 +347,7 @@ export default function MMCMResourceBookingApp() {
                                   <div className="text-sm">
                                     <p><strong>ID:</strong> {b.id}</p>
                                     <p><strong>Resource:</strong> {b.resourceName}</p>
-                                    <p><strong>When:</strong> {new Date(b.start).toLocaleString()} â€” {new Date(b.end).toLocaleString()}</p>
+                                    <p><strong>When:</strong> {new Date(b.start).toLocaleString()} — {new Date(b.end).toLocaleString()}</p>
                                   </div>
                                   <DialogFooter>
                                     <Button>Download PDF</Button>
@@ -393,7 +393,7 @@ export default function MMCMResourceBookingApp() {
               <div className="space-y-2">
                 <Label>Resource</Label>
                 <Input value={prefill?.name ?? ""} onChange={(e) => setPrefill(prefill ? { ...prefill, name: e.target.value } : null)} placeholder="Select or type resource" />
-                <p className="text-xs text-muted-foreground">Prefilled from card â€” replace if needed.</p>
+                <p className="text-xs text-muted-foreground">Prefilled from card — replace if needed.</p>
               </div>
             </div>
 
@@ -453,7 +453,7 @@ export default function MMCMResourceBookingApp() {
             </div>
 
             <div className="border-t pt-4 text-xs text-muted-foreground">
-              <p>Workflow preview: <strong>REQUEST</strong> â†’ <strong>ONGOING</strong> (scan QR at pickup) â†’ <strong>SUCCESS</strong> (scan at return) or <strong>CANCEL</strong>.</p>
+              <p>Workflow preview: <strong>REQUEST</strong> → <strong>ONGOING</strong> (scan QR at pickup) → <strong>SUCCESS</strong> (scan at return) or <strong>CANCEL</strong>.</p>
             </div>
           </div>
         </SheetContent>
@@ -462,8 +462,8 @@ export default function MMCMResourceBookingApp() {
       {/* Footer */}
       <footer className="mt-10 py-10 border-t">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-xs text-muted-foreground flex flex-col sm:flex-row gap-2 justify-between">
-          <span>Local-Hosted MMCM Resource Booking â€¢ Frontend MVP</span>
-          <span>Statuses: REQUEST â€¢ ONGOING â€¢ SUCCESS â€¢ CANCEL</span>
+          <span>Local-Hosted MMCM Resource Booking • Frontend MVP</span>
+          <span>Statuses: REQUEST • ONGOING • SUCCESS • CANCEL</span>
         </div>
       </footer>
     </div>

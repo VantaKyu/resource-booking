@@ -1,40 +1,15 @@
 {
-  "name": "mmc-resource-booking-backend",
+  "name": "mmcm-booking-server",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "build": "tsc",
-    "lint": "eslint .",
-    "seed": "tsx prisma/seed.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init",
-    "prisma:deploy": "prisma migrate deploy"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.18.0",
-    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.2",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/morgan": "^1.9.7",
-    "@typescript-eslint/eslint-plugin": "^8.7.0",
-    "@typescript-eslint/parser": "^8.7.0",
-    "eslint": "^9.11.1",
-    "prisma": "^5.18.0",
-    "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "pg": "^8.12.0"
   }
 }

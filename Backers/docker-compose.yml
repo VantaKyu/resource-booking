@@ -1,37 +1,33 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: mmc_db
-    restart: unless-stopped
+    container_name: mmcm_db
     environment:
-      POSTGRES_USER: mmc_user
-      POSTGRES_PASSWORD: mmc_pass
-      POSTGRES_DB: mmc_booking
+      POSTGRES_DB: mmcm_booking
+      POSTGRES_USER: mmcm
+      POSTGRES_PASSWORD: mmcm_password
     ports:
       - "5432:5432"
     volumes:
-      - mmc_pgdata:/var/lib/postgresql/data
-
-  adminer:
-    image: adminer:4.8.1-standalone
-    restart: unless-stopped
-    ports:
-      - "8081:8080"
-    depends_on:
-      - db
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmcm -d mmcm_booking"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   api:
-    build: .
-    container_name: mmc_api
-    restart: unless-stopped
-    env_file: .env
-    ports:
-      - "8080:8080"
+    build: ./server
+    container_name: mmcm_api
+    env_file:
+      - ./server/.env
+    environment:
+      PGHOST: db
     depends_on:
-      - db
-    volumes:
-      - .:/app
-    command: sh -c "npm run prisma:deploy && node dist/index.js"
+      db:
+        condition: service_healthy
+    ports:
+      - "5174:5174"
 
 volumes:
-  mmc_pgdata:
+  dbdata:
