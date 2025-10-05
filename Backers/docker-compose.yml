@@ -17,10 +17,10 @@ services:
       retries: 10
 
   api:
-    build: ./server
+    build: .
     container_name: mmcm_api
     env_file:
-      - ./server/.env
+      - .env
     environment:
       PGHOST: db
     depends_on:
@@ -28,6 +28,15 @@ services:
         condition: service_healthy
     ports:
       - "5174:5174"
+
+  adminer:
+     image: adminer
+     container_name: mmcm_adminer
+     ports:
+       - "8080:8080"
+     depends_on:
+       db:
+         condition: service_healthy
 
 volumes:
   dbdata:
