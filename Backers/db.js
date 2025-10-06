@@ -54,6 +54,24 @@ export async function bootstrap() {
       ON bookings(resource_id, start_dt, end_dt);
   `);
 
+  /* ✅ NEW PATCH: add timestamps + normalize statuses for resources */
+  await pool.query(`
+    -- Add timestamps to resources if missing
+    ALTER TABLE resources
+      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+    -- Normalize inconsistent statuses to match API validation
+    UPDATE resources
+      SET status = 'Maintenance'
+      WHERE status ILIKE 'Under Maintenance';
+
+    UPDATE resources
+      SET status = 'Available'
+      WHERE status ILIKE 'Booked';
+  `);
+  /* ✅ END PATCH */
+
   const { rows } = await pool.query(`SELECT COUNT(*)::int AS c FROM resources;`);
   if (rows[0].c === 0) {
     await pool.query(`
@@ -62,23 +80,23 @@ export async function bootstrap() {
     ('VEHICLE','Car 1','Vehicle','Sedan',1,'Available'),
     ('VEHICLE','Car 2','Vehicle','Sedan',1,'Available'),
     ('VEHICLE','Car 3','Vehicle','MPV',1,'Maintenance'),
-    ('VEHICLE','Car 4','Vehicle','Sedan',1,'Booked'),
+    ('VEHICLE','Car 4','Vehicle','Sedan',1,'Available'),
     ('VEHICLE','Car 5','Vehicle','Sedan',1,'Available'),
 
     -- FACILITIES
-    ('FACILITY','Lecture Room','Classroom','Lecture Room',1,'Under Maintenance'),
+    ('FACILITY','Lecture Room','Classroom','Lecture Room',1,'Maintenance'),
     ('FACILITY','Drawing Room','Classroom','Drawing Room',1,'Available'),
     ('FACILITY','Computer Lab','Lab','Computer Lab',1,'Available'),
     ('FACILITY','Chemistry Lab','Lab','Chemistry Lab',1,'Available'),
     ('FACILITY','Engineering Lab','Lab','Engineering Lab',1,'Available'),
     ('FACILITY','Auditorium 1','Auditorium','Auditorium 1',1,'Available'),
-    ('FACILITY','Auditorium 2','Auditorium','Auditorium 2',1,'Under Maintenance'),
+    ('FACILITY','Auditorium 2','Auditorium','Auditorium 2',1,'Maintenance'),
     ('FACILITY','Auditorium 3','Auditorium','Auditorium 3',1,'Available'),
     ('FACILITY','Drawing Lab 3','Lab','Drawing Lab',1,'Available'),
     ('FACILITY','Plaza','Outdoor','Plaza',1,'Available'),
     ('FACILITY','Playcourt 1','Court','Playcourt',1,'Available'),
     ('FACILITY','Playcourt 2','Court','Playcourt',1,'Available'),
-    ('FACILITY','Playcourt 3','Court','Playcourt',1,'Under Maintenance'),
+    ('FACILITY','Playcourt 3','Court','Playcourt',1,'Maintenance'),
     ('FACILITY','Playcourt 4','Court','Playcourt',1,'Available'),
     ('FACILITY','Volleyball Court','Court','Volleyball',1,'Available'),
     ('FACILITY','Futsal Court','Court','Futsal',1,'Available'),
