@@ -152,6 +152,13 @@ export function softDeleteResource(id: number): Promise<void> {
   });
 }
 
+export function hardDeleteResource(id: number): Promise<void> {
+  return http<void>(`/api/resources/${id}?hard=1`, {
+    method: 'DELETE',
+    headers: { ...adminHeaders() },
+  });
+}
+
 // ---------- Back-compat shims ----------
 export type Kind = ResourceKind;
 
@@ -175,6 +182,7 @@ const api = {
   createResource,
   updateResource,
   softDeleteResource,
+  hardDeleteResource,
   // legacy aliases
   resources,
   bookings,

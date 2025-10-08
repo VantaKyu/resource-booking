@@ -1,36 +1,71 @@
+/* Tailwind + animations */
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Dark-mode utility (shadcn style) */
 @custom-variant dark (&:is(.dark *));
 
+/* -------------------------------------------
+   Tailwind “theme” bridge → CSS variables
+   This maps Tailwind color names (bg-card, text-foreground, etc.)
+   to the design tokens we define below in :root / .dark.
+   You generally won’t edit this block; edit the tokens below.
+-------------------------------------------- */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Global background & text (body, app shell, footer bg) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Cards (Resource cards, Booking cards) */
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+
+  /* Popovers/Dialogs (Dialog, Dropdown/Select popover) */
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+
+  /* Primary (used by button.tsx when variant="default") */
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+
+  /* Secondary (button.tsx when variant="secondary") */
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Muted (tabs.tsx TabsList surface, subtle containers) */
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+
+  /* Accent (badge.tsx when variant="secondary"/accent-like) */
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+
+  /* Destructive (button.tsx variant="destructive") */
   --color-destructive: var(--destructive);
+
+  /* Borders & Inputs:
+     - --border: card.tsx outlines, section dividers, tabs.tsx active border
+     - --input: input.tsx borders, select.tsx trigger border
+  */
   --color-border: var(--border);
   --color-input: var(--input);
+
+  /* Focus ring (button.tsx, input.tsx, select.tsx, tabs.tsx) */
   --color-ring: var(--ring);
+
+  /* Charts (unused) */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
+  /* Sidebar tokens (unused in this app) */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -41,31 +76,72 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* -------------------------------------------
+   LIGHT THEME TOKENS  (default :root)
+   Key links to components (.tsx):
+   - card.tsx           → --card, --card-foreground, --border
+   - tabs.tsx           → --muted (TabsList), --input (active border), --background (active fill)
+   - button.tsx         → --primary, --primary-foreground (default)
+   - input.tsx/select.tsx → --input, --foreground, --ring
+   - dialog.tsx         → --popover, --popover-foreground
+   - sheet.tsx          → --background, --foreground, --border
+   - badge.tsx          → --accent, --accent-foreground (or component variants)
+   - global (app shell) → --background, --foreground
+-------------------------------------------- */
 :root {
+  /* Corner radii (card.tsx, button.tsx, input.tsx) */
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+
+  /* Page background (app shell, header/footer, tabs active fill) */
+  --background: oklch(0.985 0 0); /* affects tabs.tsx active trigger bg via bg-background */
+
+  /* Default text color (global, labels, content) */
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+
+  /* Card surfaces (card.tsx: resource/booking cards) */
+  --card: oklch(1 0 0);             /* keep cards white */
   --card-foreground: oklch(0.145 0 0);
+
+  /* Dialog / Popover content (dialog.tsx, select.tsx dropdown) */
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
+
+  /* Buttons (button.tsx default variant) */
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
+
+  /* Secondary buttons/surfaces (button.tsx secondary) */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
+
+  /* TabsList background (tabs.tsx), muted text (label.tsx, small captions) */
+  --muted: oklch(0.88 0 0);
   --muted-foreground: oklch(0.556 0 0);
+
+  /* Badges / accent surfaces (badge.tsx when using accent styles) */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
+
+  /* Destructive buttons (button.tsx destructive) */
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+
+  /* Borders (card.tsx outline, tabs.tsx active border, dividers) */
+  --border: oklch(0.82 0 0);
+
+  /* Inputs (input.tsx, select.tsx trigger borders) */
+  --input: oklch(0.90 0 0);
+
+  /* Focus ring color (button.tsx, input.tsx, select.tsx, tabs.tsx) */
   --ring: oklch(0.708 0 0);
+
+  /* Charts (unused) */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+
+  /* Sidebar (unused) */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -76,30 +152,53 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* -------------------------------------------
+   DARK THEME TOKENS  (.dark root)
+   Same mapping; components switch automatically.
+-------------------------------------------- */
 .dark {
+  /* App shell + tabs active fill (tabs.tsx) */
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+
+  /* Card surfaces (card.tsx) */
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
+
+  /* Dialog/Popover (dialog.tsx, select.tsx menu) */
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
+
+  /* Buttons (button.tsx default) */
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
+
+  /* Secondary (button.tsx secondary) */
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
+
+  /* TabsList background + muted text */
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
+
+  /* Badges / accent */
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
+
+  /* Borders/inputs/ring (card.tsx, input.tsx, tabs.tsx) */
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 10%);  /* lighter in dark for subtle lines */
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+
+  /* Charts (unused) */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+
+  /* Sidebar (unused) */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -110,6 +209,14 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* -------------------------------------------
+   Base layer utilities applied globally
+   - border color for all elements → var(--border)
+   - focus outlines → var(--ring)/50
+   - body bg/text → var(--background)/var(--foreground)
+   Components affected:
+   - card.tsx, input.tsx, select.tsx, tabs.tsx, button.tsx, dialog.tsx, sheet.tsx
+-------------------------------------------- */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -117,4 +224,8 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+html, body, #root {
+  height: 100%;
 }

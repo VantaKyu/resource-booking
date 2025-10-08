@@ -118,19 +118,72 @@ app.patch("/api/resources/:id", requireRole(["ADMIN","STAFF"]), async (req, res)
 });
 
 // Admin/Staff: soft delete resource (set status = Inactive)
+// Admin/Staff: delete resource
+// - Soft delete (default): sets status='Inactive'
+// - Hard delete: only if there are no bookings referencing the resource (query: ?hard=1)
 app.delete("/api/resources/:id", requireRole(["ADMIN","STAFF"]), async (req, res) => {
+  const client = await pool.connect();
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: "invalid id" });
-    const { rowCount } = await pool.query(
-      `UPDATE resources SET status = 'Inactive', updated_at = NOW() WHERE id = $1`,
+
+    const hard = String(req.query.hard || req.query.mode || "")
+      .toLowerCase()
+      .trim();
+    const isHard =
+      hard === "1" || hard === "true" || hard === "hard";
+
+    if (!isHard) {
+      // SOFT DELETE: status -> Inactive
+      const { rowCount } = await pool.query(
+        `UPDATE resources SET status = 'Inactive', updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+      if (!rowCount) return res.status(404).json({ error: "not found" });
+      return res.status(204).end();
+    }
+
+    // HARD DELETE
+    await client.query("BEGIN");
+
+    // 1) Block if there are any ACTIVE bookings
+    const active = await client.query(
+      `SELECT 1 FROM bookings 
+       WHERE resource_id = $1 AND status IN ('REQUEST','ONGOING') 
+       LIMIT 1`,
       [id]
     );
-    if (!rowCount) return res.status(404).json({ error: "not found" });
-    res.status(204).end();
+    if (active.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        error: "in_use",
+        message:
+          "Cannot delete: there are active bookings (REQUEST/ONGOING) for this resource.",
+      });
+    }
+
+    // 2) Remove only NON-active bookings (SUCCESS/CANCEL) so FK won't block
+    await client.query(
+      `DELETE FROM bookings 
+       WHERE resource_id = $1 AND status IN ('SUCCESS','CANCEL')`,
+      [id]
+    );
+
+    // 3) Delete the resource
+    const del = await client.query(`DELETE FROM resources WHERE id = $1`, [id]);
+    if (del.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "not found" });
+    }
+
+    await client.query("COMMIT");
+    return res.status(204).end();
   } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
     console.error("DELETE /api/resources/:id", e);
     res.status(500).json({ error: "Server error" });
+  } finally {
+    client.release();
   }
 });
 
