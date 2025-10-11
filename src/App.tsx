@@ -106,8 +106,19 @@ export default function App() {
   const [rqRole, setRqRole] = useState<string>(
     () => localStorage.getItem("rb_rq_role") || "STUDENT"
   );
-  useEffect(() => { localStorage.setItem("rb_rq_name", rqName); }, [rqName]);
-  useEffect(() => { localStorage.setItem("rb_rq_role", rqRole); }, [rqRole]);
+
+  // --- CHANGED: only store rqName when non-empty; otherwise remove the key
+  useEffect(() => {
+    if (rqName.trim()) {
+      localStorage.setItem("rb_rq_name", rqName);
+    } else {
+      localStorage.removeItem("rb_rq_name");
+    }
+  }, [rqName]);
+
+  useEffect(() => {
+    localStorage.setItem("rb_rq_role", rqRole);
+  }, [rqRole]);
 
   async function loadAll() {
     try {
@@ -177,7 +188,7 @@ export default function App() {
 
     // Validate requester
     if (!rqName.trim()) {
-      toast.error("Please enter your name (Requester).");
+      toast.error("Please enter your name.");
       return;
     }
 
@@ -215,6 +226,13 @@ export default function App() {
       setBookings((prev) => [created, ...prev]);
       setOpenSheet(false);
       toast.success(`${prefill?.name ?? "Resource"} booked successfully.`);
+
+      setRqName("");                        
+      localStorage.removeItem("rb_rq_name"); 
+      if (startEl) startEl.value = "";
+      if (endEl) endEl.value = "";
+      if (qtyEl) qtyEl.value = "1";
+      if (purposeEl) purposeEl.value = "";
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status;
       if (status === 409) {
@@ -284,7 +302,7 @@ export default function App() {
 
                 const first = list[0];
                 if (!first) {
-                  return toast.error("No resources available in this tab. Add one or switch tabs.");
+                  return toast.error("No resources available in this tab. Switch tabs.");
                 }
                 setPrefill({
                   kind: tabToKind[activeTab],
@@ -531,7 +549,7 @@ export default function App() {
       </main>
 
       <Sheet open={openSheet} onOpenChange={setOpenSheet}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto px-6">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5" /> New Booking
