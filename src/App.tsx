@@ -75,6 +75,23 @@ const STATUS_COLORS: Record<string, string> = {
   Booked: "bg-rose-100 text-rose-700",
 };
 
+/** Public site policy:
+ *  - Users can VIEW and CREATE bookings.
+ *  - Users CANNOT Cancel or Start (Scan) bookings here.
+ */
+const PUBLIC_CAN_MANAGE = false;
+
+/* ---------- Date helper (for datetime-local min) ---------- */
+function toLocalDatetimeInputValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
 // helper: return list of resources given Kind
 function resourcesOf(
   kind: Kind,
@@ -107,7 +124,7 @@ export default function App() {
     () => localStorage.getItem("rb_rq_role") || "STUDENT"
   );
 
-  // --- CHANGED: only store rqName when non-empty; otherwise remove the key
+  // only store rqName when non-empty; otherwise remove the key
   useEffect(() => {
     if (rqName.trim()) {
       localStorage.setItem("rb_rq_name", rqName);
@@ -178,6 +195,9 @@ export default function App() {
     );
   }
 
+  // Min value for datetime-local: NOW (prevents picking any past time)
+  const nowMin = useMemo(() => toLocalDatetimeInputValue(new Date()), []);
+
   async function createBookingFromDrawer() {
     const startEl = document.getElementById("start-dt") as HTMLInputElement | null;
     const endEl = document.getElementById("end-dt") as HTMLInputElement | null;
@@ -203,9 +223,31 @@ export default function App() {
       return;
     }
 
-    // Local pre-check
-    const startISO = new Date(startEl.value).toISOString();
-    const endISO = new Date(endEl.value).toISOString();
+    // ---- Date-time validation: allow today & future, block past ----
+    const start = new Date(startEl.value);
+    const end = new Date(endEl.value);
+    const now = new Date();
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      toast.error("Invalid date/time.");
+      return;
+    }
+
+    if (start < now) {
+      toast.error("Start time must be today or later.");
+      return;
+    }
+
+    if (end <= start) {
+      toast.error("End time must be after the start time.");
+      return;
+    }
+
+    // Convert to ISO for API & conflict check
+    const startISO = start.toISOString();
+    const endISO = end.toISOString();
+
+    // Local pre-check against existing bookings
     if (hasLocalConflict(prefill.kind, prefill.id, startISO, endISO)) {
       toast.error("Conflicts with an existing booking.");
       return;
@@ -227,12 +269,15 @@ export default function App() {
       setOpenSheet(false);
       toast.success(`${prefill?.name ?? "Resource"} booked successfully.`);
 
-      setRqName("");                        
-      localStorage.removeItem("rb_rq_name"); 
+      // Reset requester + inputs so a new booking starts clean
+      setRqName("");
+      localStorage.removeItem("rb_rq_name");
       if (startEl) startEl.value = "";
       if (endEl) endEl.value = "";
       if (qtyEl) qtyEl.value = "1";
       if (purposeEl) purposeEl.value = "";
+      // Optional: also reset role default
+      // setRqRole("STUDENT");
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status;
       if (status === 409) {
@@ -250,6 +295,7 @@ export default function App() {
       else if (target === "SUCCESS") updated = await api.finish(id);
       else if (target === "CANCEL") updated = await api.cancel(id);
       else return;
+      // Keep local list consistent
       setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)));
       toast(`Booking ${target}`, { description: `Booking #${id} marked as ${target}.` });
     } catch (e: any) {
@@ -480,9 +526,27 @@ export default function App() {
                               {new Date(b.start_dt).toLocaleString()} —{" "}
                               {new Date(b.end_dt).toLocaleString()}
                             </p>
+
+                            {(b as any).requester_name && (
+                              <p className="text-[11px] text-muted-foreground/80 italic mt-1">
+                                Requested by{" "}
+                                <span className="font-medium not-italic text-foreground">
+                                  {(b as any).requester_name}
+                                </span>
+                                {((b as any).requester_role || "").trim() && (
+                                  <>
+                                    {" "}•{" "}
+                                    <span className="not-italic tracking-wide">
+                                      {(b as any).requester_role}
+                                    </span>
+                                  </>
+                                )}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {status === "REQUEST" && (
+                            {/* PUBLIC SITE: hide Cancel and Start (Scan) */}
+                            {status === "REQUEST" && PUBLIC_CAN_MANAGE && (
                               <>
                                 <Button
                                   size="sm"
@@ -498,12 +562,14 @@ export default function App() {
                                 </Button>
                               </>
                             )}
+
                             {status === "ONGOING" && (
                               <Button size="sm" onClick={() => updateStatus(b.id, "SUCCESS")}>
                                 <CheckCircle2 className="h-4 w-4 mr-1" />
                                 Finish
                               </Button>
                             )}
+
                             {status === "SUCCESS" && (
                               <Dialog>
                                 <DialogTrigger asChild>
@@ -548,6 +614,7 @@ export default function App() {
         </section>
       </main>
 
+      {/* Booking Drawer (still available to public) */}
       <Sheet open={openSheet} onOpenChange={setOpenSheet}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto px-6">
           <SheetHeader>
@@ -621,11 +688,11 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start</Label>
-                <Input type="datetime-local" id="start-dt" />
+                <Input type="datetime-local" id="start-dt" min={nowMin} step="60" />
               </div>
               <div className="space-y-2">
                 <Label>End</Label>
-                <Input type="datetime-local" id="end-dt" />
+                <Input type="datetime-local" id="end-dt" min={nowMin} step="60" />
               </div>
             </div>
 
