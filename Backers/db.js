@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { Pool } from "pg";
+import bcrypt from "bcryptjs";
 dotenv.config();
 
 export const pool = new Pool({
@@ -20,6 +21,22 @@ export async function bootstrap() {
       role TEXT NOT NULL DEFAULT 'STUDENT',
       dept TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('ADMIN', 'STAFF')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS session (
+      sid VARCHAR NOT NULL PRIMARY KEY,
+      sess JSON NOT NULL,
+      expire TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
 
     CREATE TABLE IF NOT EXISTS resources (
       id SERIAL PRIMARY KEY,
@@ -69,6 +86,14 @@ export async function bootstrap() {
       SET status = 'Available'
       WHERE status ILIKE 'Booked';
   `);
+
+  // Create default admin account
+  const defaultHash = await bcrypt.hash('admin123', 10);
+  await pool.query(`
+    INSERT INTO admin_users (username, password_hash, role)
+    VALUES ('admin', $1, 'ADMIN')
+    ON CONFLICT (username) DO NOTHING
+  `, [defaultHash]);
 
   const { rows } = await pool.query(`SELECT COUNT(*)::int AS c FROM resources;`);
   if (rows[0].c === 0) {

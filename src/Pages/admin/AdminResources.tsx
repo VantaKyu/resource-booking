@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../lib/AuthContext";
 import {
   // Resources
   listResources,
@@ -66,12 +67,19 @@ function Confirm({
 
 /* -------------------- Main Page with Tabs -------------------- */
 export default function AdminResources() {
-  const n = useNavigate();
-  const role = typeof window !== "undefined" ? window.sessionStorage.getItem("demoRole") : null;
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
-    if (!role || (role !== "ADMIN" && role !== "STAFF")) n("/admin");
-  }, [role, n]);
+    if (!user) {
+      navigate("/admin");
+    }
+  }, [user, navigate]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/admin");
+  };
 
   // Top-level tab: "RESOURCES" | "APPROVALS"
   const [tab, setTab] = useState<"RESOURCES" | "APPROVALS">("RESOURCES");
@@ -186,7 +194,14 @@ export default function AdminResources() {
     <div className="min-h-screen bg-gray-50">
       {/* Header with tabs */}
       <header className="flex items-center justify-between p-4 border-b bg-white">
-        <h1 className="text-xl font-semibold">Admin</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold">Admin</h1>
+          {user && (
+            <span className="text-sm text-gray-600">
+              Welcome, {user.username} ({user.role})
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             className={`rounded-lg border px-3 py-2 ${tab === "RESOURCES" ? "bg-gray-100" : ""}`}
@@ -199,6 +214,12 @@ export default function AdminResources() {
             onClick={() => setTab("APPROVALS")}
           >
             Approvals
+          </button>
+          <button
+            className="rounded-lg border px-3 py-2 text-red-600 hover:bg-red-50"
+            onClick={handleLogout}
+          >
+            Logout
           </button>
         </div>
       </header>

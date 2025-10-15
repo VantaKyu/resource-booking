@@ -7,6 +7,7 @@ import App from './App';
 import AdminGate from './Pages/admin/AdminGate';
 import AdminResources from './Pages/admin/AdminResources';
 import { Toaster } from 'sonner';
+import { AuthProvider } from './lib/AuthContext';
 
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
@@ -20,8 +21,10 @@ const rootEl = document.getElementById('root');
 // Mount React immediately (it renders behind the splash)
 createRoot(rootEl!).render(
   <StrictMode>
-    <RouterProvider router={router} />
-    <Toaster richColors position="bottom-right" />
+    <AuthProvider>
+      <RouterProvider router={router} />
+      <Toaster richColors position="bottom-right" />
+    </AuthProvider>
   </StrictMode>
 );
 

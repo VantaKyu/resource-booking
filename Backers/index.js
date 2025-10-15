@@ -1,34 +1,55 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import session from "express-session";
+import pgSession from "connect-pg-simple";
+import bcrypt from "bcryptjs";
 import { pool, bootstrap } from "./db.js";
 
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5174;
 
-// ---- CORS: allow localhost + 127.0.0.1; allow x-demo-role for quick admin testing
+// ---- CORS: allow localhost + 127.0.0.1; allow credentials for session cookies
 const ALLOWED = (process.env.ORIGIN_LIST || "http://localhost:5173,http://127.0.0.1:5173").split(",");
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     return cb(null, ALLOWED.includes(origin));
   },
+  credentials: true, // Allow cookies
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization","x-demo-role"], // ⬅ added x-demo-role
+  allowedHeaders: ["Content-Type","Authorization"],
 }));
 app.options("*", cors());
 
 app.use(express.json());
 
+// ---- Session configuration
+const PgStore = pgSession(session);
+
+app.use(session({
+  store: new PgStore({ pool, tableName: 'session' }),
+  secret: process.env.SESSION_SECRET || 'mmcm-booking-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    httpOnly: true,
+    secure: false, // set to true if using HTTPS
+    sameSite: 'lax'
+  }
+}));
+
 // --------------------------------------------------------
-// Helper: very light role gate (swap with real auth/JWT later)
-// Pass header: x-demo-role: ADMIN | STAFF | DRIVER | STUDENT
-function requireRole(roles = []) {
+// Authentication middleware
+function requireAuth(roles = ['ADMIN', 'STAFF']) {
   return (req, res, next) => {
-    const role = String(req.headers["x-demo-role"] || "").toUpperCase();
-    if (!roles.includes(role)) {
-      return res.status(403).json({ error: "Forbidden: insufficient role" });
+    if (!req.session?.user) {
+      return res.status(401).json({ error: 'Unauthorized: Please login' });
+    }
+    if (!roles.includes(req.session.user.role)) {
+      return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
     }
     next();
   };
@@ -36,6 +57,100 @@ function requireRole(roles = []) {
 // --------------------------------------------------------
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// -------------------- AUTHENTICATION -------------------------
+
+// POST /api/auth/login - Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+  
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, username, password_hash, role FROM admin_users WHERE username = $1',
+      [username]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const user = rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      role: user.role
+    };
+    
+    res.json({ 
+      user: { id: user.id, username: user.username, role: user.role }
+    });
+  } catch (e) {
+    console.error("POST /api/auth/login", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/auth/logout - Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: 'Logout failed' });
+    res.clearCookie('connect.sid');
+    res.json({ message: 'Logged out successfully' });
+  });
+});
+
+// GET /api/auth/me - Get current user
+app.get('/api/auth/me', (req, res) => {
+  if (!req.session?.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  res.json({ user: req.session.user });
+});
+
+// POST /api/auth/change-password - Change password
+app.post('/api/auth/change-password', requireAuth(), async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current and new password required' });
+  }
+  
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+  
+  try {
+    const { rows } = await pool.query(
+      'SELECT password_hash FROM admin_users WHERE id = $1',
+      [req.session.user.id]
+    );
+    
+    const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [newHash, req.session.user.id]
+    );
+    
+    res.json({ message: 'Password changed successfully' });
+  } catch (e) {
+    console.error("POST /api/auth/change-password", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // -------------------- RESOURCES -------------------------
 
@@ -56,7 +171,7 @@ app.get("/api/resources", async (req, res) => {
 });
 
 // Admin/Staff: create resource
-app.post("/api/resources", requireRole(["ADMIN","STAFF"]), async (req, res) => {
+app.post("/api/resources", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   try {
     const { kind, name, subcategory, type, quantity = 1, status = "Available" } = req.body || {};
     if (!kind || !name) return res.status(400).json({ error: "kind and name are required" });
@@ -80,7 +195,7 @@ app.post("/api/resources", requireRole(["ADMIN","STAFF"]), async (req, res) => {
 });
 
 // Admin/Staff: update resource (name, subcategory, type, quantity, status)
-app.patch("/api/resources/:id", requireRole(["ADMIN","STAFF"]), async (req, res) => {
+app.patch("/api/resources/:id", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: "invalid id" });
@@ -121,7 +236,7 @@ app.patch("/api/resources/:id", requireRole(["ADMIN","STAFF"]), async (req, res)
 // Admin/Staff: delete resource
 // - Soft delete (default): sets status='Inactive'
 // - Hard delete: only if there are no bookings referencing the resource (query: ?hard=1)
-app.delete("/api/resources/:id", requireRole(["ADMIN","STAFF"]), async (req, res) => {
+app.delete("/api/resources/:id", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   const client = await pool.connect();
   try {
     const id = Number(req.params.id);
@@ -281,7 +396,7 @@ app.post("/api/bookings", async (req, res) => {
 });
 
 // --- Status transitions ---
-app.post("/api/bookings/:id/start", async (req, res) => {
+app.post("/api/bookings/:id/start", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const upd = await pool.query(
@@ -299,7 +414,7 @@ app.post("/api/bookings/:id/start", async (req, res) => {
   }
 });
 
-app.post("/api/bookings/:id/finish", async (req, res) => {
+app.post("/api/bookings/:id/finish", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const upd = await pool.query(
@@ -317,7 +432,7 @@ app.post("/api/bookings/:id/finish", async (req, res) => {
   }
 });
 
-app.post("/api/bookings/:id/cancel", async (req, res) => {
+app.post("/api/bookings/:id/cancel", requireAuth(["ADMIN","STAFF"]), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const upd = await pool.query(

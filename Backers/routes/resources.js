@@ -25,10 +25,14 @@ router.get("/", async (req, res) => {
 });
 
 // --- Helper: basic role gate (replace with your real auth later) ---
+const ALLOWED_ROLES = ["ADMIN", "STAFF"];
 function requireRole(roles) {
   return (req, res, next) => {
-    // Demo: allow x-demo-role header while you don’t have login wired here.
     const role = String(req.headers["x-demo-role"] || "").toUpperCase();
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(403).json({ error: "Forbidden: role not allowed" });
+    }
     if (!roles.includes(role)) {
       return res.status(403).json({ error: "Forbidden: insufficient role" });
     }

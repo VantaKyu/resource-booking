@@ -49,20 +49,33 @@ export interface CreateBookingPayload {
   purpose?: string;
 }
 
+export interface LoginPayload {
+  username: string;
+  password: string;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  role: 'ADMIN' | 'STAFF';
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
 // ---------- Config ----------
 export const BASE: string =
   (import.meta as any).env?.VITE_API_BASE || 'http://localhost:5174';
 
 // ---------- Helpers ----------
-function adminHeaders(): HeadersInit {
-  const role = typeof window !== 'undefined'
-    ? window.sessionStorage.getItem('demoRole')
-    : null;
-  return role ? { 'x-demo-role': role } : {};
-}
 
 async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: 'include', // Include cookies in requests
+  });
   if (!res.ok) {
     try {
       const j = await res.clone().json();
@@ -82,6 +95,33 @@ export function health(): Promise<{ ok: boolean }> {
   return http<{ ok: boolean }>('/api/health');
 }
 
+// ---------- Authentication ----------
+export function login(payload: LoginPayload): Promise<{ user: AdminUser }> {
+  return http<{ user: AdminUser }>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function logout(): Promise<{ message: string }> {
+  return http<{ message: string }>('/api/auth/logout', {
+    method: 'POST',
+  });
+}
+
+export function getCurrentUser(): Promise<{ user: AdminUser }> {
+  return http<{ user: AdminUser }>('/api/auth/me');
+}
+
+export function changePassword(payload: ChangePasswordPayload): Promise<{ message: string }> {
+  return http<{ message: string }>('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 // ---------- Bookings ----------
 export function listBookings(): Promise<Booking[]> {
   return http<Booking[]>('/api/bookings');
@@ -98,21 +138,18 @@ export function createBooking(payload: CreateBookingPayload): Promise<Booking> {
 export function startBooking(id: number): Promise<Booking> {
   return http<Booking>(`/api/bookings/${id}/start`, {
     method: 'POST',
-    headers: { ...adminHeaders() },
   });
 }
 
 export function finishBooking(id: number): Promise<Booking> {
   return http<Booking>(`/api/bookings/${id}/finish`, {
     method: 'POST',
-    headers: { ...adminHeaders() },
   });
 }
 
 export function cancelBooking(id: number): Promise<Booking> {
   return http<Booking>(`/api/bookings/${id}/cancel`, {
     method: 'POST',
-    headers: { ...adminHeaders() },
   });
 }
 
@@ -129,7 +166,7 @@ export function createResource(
 ): Promise<Resource> {
   return http<Resource>('/api/resources', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
 }
@@ -140,7 +177,7 @@ export function updateResource(
 ): Promise<Resource> {
   return http<Resource>(`/api/resources/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
 }
@@ -148,14 +185,12 @@ export function updateResource(
 export function softDeleteResource(id: number): Promise<void> {
   return http<void>(`/api/resources/${id}`, {
     method: 'DELETE',
-    headers: { ...adminHeaders() },
   });
 }
 
 export function hardDeleteResource(id: number): Promise<void> {
   return http<void>(`/api/resources/${id}?hard=1`, {
     method: 'DELETE',
-    headers: { ...adminHeaders() },
   });
 }
 
@@ -173,6 +208,10 @@ const api = {
   BASE,
   // new names
   health,
+  login,
+  logout,
+  getCurrentUser,
+  changePassword,
   listBookings,
   createBooking,
   startBooking,
