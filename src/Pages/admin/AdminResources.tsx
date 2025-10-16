@@ -23,6 +23,17 @@ import {
   type BusyDayForecastPoint,
 } from "../../lib/api";
 import { generateBusyDayForecast } from "../../lib/forecast";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Line,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 
 const KINDS = ["VEHICLE", "FACILITY", "EQUIPMENT"] as const satisfies readonly ResourceKind[];
 const BOOKING_TABS: (BookingStatus | "ALL")[] = ["REQUEST", "ONGOING", "SUCCESS", "CANCEL", "ALL"];
@@ -400,6 +411,21 @@ export default function AdminResources() {
             </div>
           </div>
 
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              { key: "total", label: "Total bookings", value: bookingCount },
+              { key: "request", label: "Pending requests", value: counts.REQUEST },
+              { key: "ongoing", label: "Ongoing", value: counts.ONGOING },
+              { key: "success", label: "Completed", value: counts.SUCCESS },
+              { key: "cancel", label: "Cancelled", value: counts.CANCEL },
+            ].map(({ key, label, value }) => (
+              <div key={key} className="rounded-2xl border-2 border-gray-300 bg-white p-4 shadow-md">
+                <p className="text-sm text-gray-500">{label}</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+              </div>
+            ))}
+          </section>
+
           {shouldShowForecastCard && (
             <ForecastSummary
               forecast={forecast}
@@ -421,21 +447,6 @@ export default function AdminResources() {
           {!loadingBk && bookingCount === 0 && !bkErr && (
             <p className="text-sm text-gray-600">No bookings recorded yet.</p>
           )}
-
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {[
-              { key: "total", label: "Total bookings", value: bookingCount },
-              { key: "request", label: "Pending requests", value: counts.REQUEST },
-              { key: "ongoing", label: "Ongoing", value: counts.ONGOING },
-              { key: "success", label: "Completed", value: counts.SUCCESS },
-              { key: "cancel", label: "Cancelled", value: counts.CANCEL },
-            ].map(({ key, label, value }) => (
-              <div key={key} className="rounded-2xl border bg-white p-4 shadow-sm">
-                <p className="text-sm text-gray-500">{label}</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-              </div>
-            ))}
-          </section>
         </main>
       )}
 
@@ -602,6 +613,22 @@ function ForecastSummary({
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [forecast]);
 
+  const chartData = useMemo(() => {
+    if (!forecast) return [];
+    return forecast.points
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map((point) => ({
+        date: point.date,
+        dateLabel: new Date(`${point.date}T00:00:00`).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+        expectedBookings: point.expectedBookings,
+        busyPercent: Math.round(point.busyProbability * 100),
+        label: point.label,
+      }));
+  }, [forecast]);
+
   const formatter = useMemo(
     () =>
       new Intl.DateTimeFormat(undefined, {
@@ -622,7 +649,7 @@ function ForecastSummary({
   const showEmptyState = !loading && !forecast && attempted && !error;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border-2 border-gray-300 bg-white p-4 shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">Demand forecast</h3>
@@ -660,6 +687,83 @@ function ForecastSummary({
         <p className="mt-3 text-sm text-gray-600">
           Add bookings to build enough history for a forecast.
         </p>
+      )}
+
+      {forecast && !loading && chartData.length > 0 && (
+        <div className="mt-4">
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="busyGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#fb7185" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#fb7185" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="dateLabel"
+                tick={{ fontSize: 11, fill: "#6b7280" }}
+                tickLine={{ stroke: "#e5e7eb" }}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: "#6b7280" }}
+                tickLine={{ stroke: "#e5e7eb" }}
+                label={{ value: "Expected Bookings", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#6b7280" } }}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: "#6b7280" }}
+                tickLine={{ stroke: "#e5e7eb" }}
+                label={{ value: "Busy %", angle: 90, position: "insideRight", style: { fontSize: 11, fill: "#6b7280" } }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+                formatter={(value: number, name: string) => {
+                  if (name === "expectedBookings") return [value.toFixed(1), "Expected Bookings"];
+                  if (name === "busyPercent") return [`${value}%`, "Busy Probability"];
+                  return [value, name];
+                }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
+                formatter={(value) => {
+                  if (value === "expectedBookings") return "Expected Bookings";
+                  if (value === "busyPercent") return "Busy Probability";
+                  return value;
+                }}
+              />
+              <Area
+                yAxisId="right"
+                type="monotone"
+                dataKey="busyPercent"
+                stroke="#fb7185"
+                strokeWidth={2}
+                fill="url(#busyGradient)"
+                name="busyPercent"
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="expectedBookings"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ fill: "#3b82f6", r: 3 }}
+                activeDot={{ r: 5 }}
+                name="expectedBookings"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {forecast && !loading && points.length > 0 && (

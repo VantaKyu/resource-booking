@@ -8,6 +8,7 @@ import {
 interface ForecastOptions {
   horizonDays?: number;
   smoothWindow?: number;
+  smoothingFactor?: number;
 }
 
 function isoDateOnly(date: Date): string {
@@ -29,14 +30,15 @@ function standardDeviation(values: number[], avg: number): number {
   return Math.sqrt(variance);
 }
 
-function movingAverage(values: number[], window: number): number[] {
+function exponentialMovingAverage(values: number[], alpha: number): number[] {
   if (values.length === 0) return [];
-  const safeWindow = Math.max(1, window);
+  const safeAlpha = Math.max(0, Math.min(1, alpha)); // Clamp alpha between 0 and 1
   const results: number[] = [];
-  for (let i = 0; i < values.length; i += 1) {
-    const start = Math.max(0, i - safeWindow + 1);
-    const slice = values.slice(start, i + 1);
-    results.push(mean(slice));
+  let ema = values[0]; // Initialize EMA with first value
+  results.push(ema);
+  for (let i = 1; i < values.length; i += 1) {
+    ema = safeAlpha * values[i] + (1 - safeAlpha) * ema;
+    results.push(ema);
   }
   return results;
 }
@@ -60,6 +62,7 @@ export function generateBusyDayForecast(
 ): BusyDayForecast {
   const horizonDays = options.horizonDays ?? 14;
   const smoothWindow = options.smoothWindow ?? 3;
+  const smoothingFactor = options.smoothingFactor ?? 0.3;
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -85,7 +88,7 @@ export function generateBusyDayForecast(
 
   const sortedHistoricalDates = Array.from(countsByDay.keys()).sort();
   const sortedCounts = sortedHistoricalDates.map((date) => countsByDay.get(date) ?? 0);
-  const smoothedCounts = movingAverage(sortedCounts, smoothWindow);
+  const smoothedCounts = exponentialMovingAverage(sortedCounts, smoothingFactor);
   const smoothedByDate = new Map<string, number>();
   sortedHistoricalDates.forEach((date, index) => {
     smoothedByDate.set(date, smoothedCounts[index]);
@@ -105,7 +108,7 @@ export function generateBusyDayForecast(
       const lookbackKey = isoDateOnly(new Date(future.getTime() - 7 * 24 * 60 * 60 * 1000));
       const smoothed = smoothedByDate.get(lookbackKey);
       if (typeof smoothed === "number") {
-        baseline = (baseline + smoothed) / 2;
+        baseline = baseline * 0.4 + smoothed * 0.6;
       }
     }
 
@@ -139,9 +142,9 @@ export function generateBusyDayForecast(
   return {
     generated_at: new Date().toISOString(),
     horizon_days: horizonDays,
-    model: "weekday-moving-average",
+    model: "weekday-ema",
     points,
-    notes: "Generated locally from booking history via moving averages.",
+    notes: "Generated locally from booking history via exponential moving averages.",
     usingFallback: true,
   };
 }
