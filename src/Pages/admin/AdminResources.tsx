@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/AuthContext";
 import {
@@ -16,12 +16,57 @@ import {
   startBooking,
   finishBooking,
   cancelBooking,
+  getBusyDayForecast,
   type Booking,
   type BookingStatus,
+  type BusyDayForecast,
+  type BusyDayForecastPoint,
 } from "../../lib/api";
+import { generateBusyDayForecast } from "../../lib/forecast";
 
 const KINDS = ["VEHICLE", "FACILITY", "EQUIPMENT"] as const satisfies readonly ResourceKind[];
 const BOOKING_TABS: (BookingStatus | "ALL")[] = ["REQUEST", "ONGOING", "SUCCESS", "CANCEL", "ALL"];
+const FORECAST_HORIZON_DAYS = 14;
+
+function buildBookingsSignature(list: Booking[]): string {
+  return list
+    .filter((b) => Boolean(b?.start_dt) && b.status !== "CANCEL")
+    .map((b) => {
+      const start = new Date(b.start_dt);
+      const isoDate = Number.isNaN(start.getTime())
+        ? "invalid"
+        : `${start.getUTCFullYear()}-${`${start.getUTCMonth() + 1}`.padStart(2, "0")}-${`${start.getUTCDate()}`.padStart(2, "0")}`;
+      const quantity = typeof b.quantity === "number" && b.quantity > 0 ? b.quantity : 1;
+      return `${isoDate}:${quantity}`;
+    })
+    .sort()
+    .join("|");
+}
+
+function normalizeErrorMessage(
+  error: unknown,
+  fallback = "An unexpected error occurred"
+): string {
+  const raw =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (!raw) return fallback;
+  const stripped = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  if (!stripped) return fallback;
+  return stripped.replace(/^error\s+/i, "") || fallback;
+}
+
+function friendlyAnalyticsError(message: string): string {
+  if (/cannot\s+get\s+\/api\/analytics\/busy-days/i.test(message)) {
+    return "Analytics forecast endpoint unavailable.";
+  }
+  return message;
+}
+
+function fallbackForecastNote(hasBookings: boolean): string {
+  return hasBookings
+    ? "Using local moving-average forecast because the analytics endpoint is unavailable."
+    : "Analytics forecast endpoint unavailable. Showing a local baseline until bookings are recorded.";
+}
 
 /* -------------------- Confirm Modal -------------------- */
 function Confirm({
@@ -81,8 +126,10 @@ export default function AdminResources() {
     navigate("/admin");
   };
 
-  // Top-level tab: "RESOURCES" | "APPROVALS"
-  const [tab, setTab] = useState<"RESOURCES" | "APPROVALS">("RESOURCES");
+  // Top-level tab: "RESOURCES" | "DASHBOARD" | "APPROVALS"
+  const [tab, setTab] = useState<"RESOURCES" | "DASHBOARD" | "APPROVALS">(
+    "RESOURCES"
+  );
 
   // Resources state
   const [kind, setKind] = useState<ResourceKind>("VEHICLE");
@@ -96,41 +143,49 @@ export default function AdminResources() {
   const [bkErr, setBkErr] = useState<string | null>(null);
   const [bkTab, setBkTab] = useState<BookingStatus | "ALL">("REQUEST");
   const [q, setQ] = useState("");
+  const [forecast, setForecast] = useState<BusyDayForecast | null>(null);
+  const [loadingForecast, setLoadingForecast] = useState<boolean>(false);
+  const [forecastErr, setForecastErr] = useState<string | null>(null);
+  const [forecastNote, setForecastNote] = useState<string | null>(null);
+  const [forecastAttempted, setForecastAttempted] = useState<boolean>(false);
+  const [fallbackSignature, setFallbackSignature] = useState<string | null>(null);
+  const bookingCount = bookings.length;
 
   // ---- Resources load ----
-  async function refreshResources() {
+  const refreshResources = useCallback(async () => {
     setLoadingRes(true);
     setResErr(null);
     try {
       const rows = await listResources(kind);
       setItems(rows);
     } catch (e) {
-      setResErr(e instanceof Error ? e.message : "Failed to load");
+      setResErr(normalizeErrorMessage(e, "Failed to load resources"));
     } finally {
       setLoadingRes(false);
     }
-  }
-  useEffect(() => { void refreshResources(); }, [kind]);
+  }, [kind]);
+  useEffect(() => { void refreshResources(); }, [kind, refreshResources]);
 
   // ---- Bookings load (Approvals) ----
-  async function refreshBookings() {
+  const refreshBookings = useCallback(async () => {
     setLoadingBk(true);
     setBkErr(null);
     try {
       const rows = await listBookings();
       setBookings(rows);
     } catch (e) {
-      setBkErr(e instanceof Error ? e.message : "Failed to load bookings");
+      setBkErr(normalizeErrorMessage(e, "Failed to load bookings"));
     } finally {
       setLoadingBk(false);
     }
-  }
+  }, []);
   // Lazy-load bookings the first time Approvals tab is opened
   useEffect(() => {
-    if (tab === "APPROVALS" && bookings.length === 0 && !loadingBk) {
+    const needsBookings = tab === "APPROVALS" || tab === "DASHBOARD";
+    if (needsBookings && bookingCount === 0 && !loadingBk) {
       void refreshBookings();
     }
-  }, [tab]);
+  }, [tab, bookingCount, loadingBk, refreshBookings]);
 
   const counts = useMemo(() => ({
     REQUEST: bookings.filter((b) => b.status === "REQUEST").length,
@@ -155,6 +210,73 @@ export default function AdminResources() {
     // newest first by start time
     return list.sort((a, b) => new Date(b.start_dt).getTime() - new Date(a.start_dt).getTime());
   }, [bookings, bkTab, q]);
+
+  const hasHistoricalBookings = useMemo(
+    () => bookings.some((b) => b.status !== "CANCEL"),
+    [bookings]
+  );
+
+  const loadForecast = useCallback(async () => {
+    setLoadingForecast(true);
+    setForecastErr(null);
+    setForecastNote(null);
+    try {
+      const res = await getBusyDayForecast({ horizon_days: FORECAST_HORIZON_DAYS });
+      setForecast({ ...res, usingFallback: res.usingFallback ?? false });
+      setFallbackSignature(null);
+      if (res.notes) {
+        setForecastNote(res.notes);
+      }
+    } catch (error) {
+      const message = normalizeErrorMessage(error, "Unable to fetch forecast");
+      const fallback = generateBusyDayForecast(bookings, {
+        horizonDays: FORECAST_HORIZON_DAYS,
+      });
+      const analyticsUnavailable = friendlyAnalyticsError(message);
+      const hasBookings = bookings.length > 0;
+      setForecast(fallback);
+      setForecastNote(fallbackForecastNote(hasBookings));
+      setForecastErr(hasBookings ? analyticsUnavailable : null);
+      setFallbackSignature(buildBookingsSignature(bookings));
+    } finally {
+      setLoadingForecast(false);
+      setForecastAttempted(true);
+    }
+  }, [bookings]);
+
+  useEffect(() => {
+    if (tab !== "DASHBOARD") return;
+    if (loadingForecast) return;
+    if (forecast) return;
+    if (forecastAttempted) return;
+    void loadForecast();
+  }, [tab, loadingForecast, forecast, forecastAttempted, loadForecast]);
+
+  useEffect(() => {
+    if (tab !== "DASHBOARD") return;
+    if (!forecastAttempted) return;
+    if (forecast) return;
+    if (loadingForecast) return;
+    if (bookingCount === 0) return;
+    void loadForecast();
+  }, [tab, forecastAttempted, forecast, loadingForecast, bookingCount, loadForecast]);
+
+  useEffect(() => {
+    if (!forecast?.usingFallback) return;
+    const signature = buildBookingsSignature(bookings);
+    if (signature === fallbackSignature) return;
+    const fallback = generateBusyDayForecast(bookings, {
+      horizonDays: FORECAST_HORIZON_DAYS,
+    });
+    setFallbackSignature(signature);
+    setForecast(fallback);
+  }, [bookings, fallbackSignature, forecast]);
+
+  const handleForecastRefresh = useCallback(() => {
+    void loadForecast();
+  }, [loadForecast]);
+
+  const shouldShowForecastCard = loadingForecast || forecastAttempted || Boolean(forecast);
 
   // ---- Booking actions ----
   async function approve(id: number) {
@@ -210,6 +332,12 @@ export default function AdminResources() {
             Resources
           </button>
           <button
+            className={`rounded-lg border px-3 py-2 ${tab === "DASHBOARD" ? "bg-gray-100" : ""}`}
+            onClick={() => setTab("DASHBOARD")}
+          >
+            Dashboard
+          </button>
+          <button
             className={`rounded-lg border px-3 py-2 ${tab === "APPROVALS" ? "bg-gray-100" : ""}`}
             onClick={() => setTab("APPROVALS")}
           >
@@ -246,7 +374,7 @@ export default function AdminResources() {
           </div>
 
           <main className="p-4">
-            {loadingRes && <div className="text-gray-600">Loading…</div>}
+            {loadingRes && <div className="text-gray-600">Loading...</div>}
             {resErr && <div className="text-red-600">{String(resErr)}</div>}
             {!loadingRes && !resErr && items.length === 0 && <Empty kind={kind} />}
             {!loadingRes && !resErr && items.length > 0 && (
@@ -254,6 +382,61 @@ export default function AdminResources() {
             )}
           </main>
         </>
+      )}
+
+      {/* DASHBOARD TAB */}
+      {tab === "DASHBOARD" && (
+        <main className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">Dashboard</h2>
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded-lg border px-3 py-2 disabled:opacity-60"
+                onClick={() => void refreshBookings()}
+                disabled={loadingBk}
+              >
+                {loadingBk ? "Refreshing..." : "Refresh bookings"}
+              </button>
+            </div>
+          </div>
+
+          {shouldShowForecastCard && (
+            <ForecastSummary
+              forecast={forecast}
+              loading={loadingForecast}
+              error={forecastErr}
+              note={forecastNote}
+              attempted={forecastAttempted}
+              hasHistory={hasHistoricalBookings}
+              onRefresh={handleForecastRefresh}
+            />
+          )}
+
+          {bkErr && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {bkErr}
+            </div>
+          )}
+
+          {!loadingBk && bookingCount === 0 && !bkErr && (
+            <p className="text-sm text-gray-600">No bookings recorded yet.</p>
+          )}
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              { key: "total", label: "Total bookings", value: bookingCount },
+              { key: "request", label: "Pending requests", value: counts.REQUEST },
+              { key: "ongoing", label: "Ongoing", value: counts.ONGOING },
+              { key: "success", label: "Completed", value: counts.SUCCESS },
+              { key: "cancel", label: "Cancelled", value: counts.CANCEL },
+            ].map(({ key, label, value }) => (
+              <div key={key} className="rounded-2xl border bg-white p-4 shadow-sm">
+                <p className="text-sm text-gray-500">{label}</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+              </div>
+            ))}
+          </section>
+        </main>
       )}
 
       {/* APPROVALS TAB */}
@@ -264,7 +447,7 @@ export default function AdminResources() {
             <div className="flex items-center gap-2">
               <input
                 className="border rounded-lg p-2"
-                placeholder="Search by ID, resource, requester…"
+                placeholder="Search by ID, resource, requester..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -292,7 +475,7 @@ export default function AdminResources() {
             ))}
           </div>
 
-          {loadingBk && <div className="text-gray-600">Loading bookings…</div>}
+          {loadingBk && <div className="text-gray-600">Loading bookings...</div>}
           {bkErr && <div className="text-red-600">{String(bkErr)}</div>}
 
           {!loadingBk && !bkErr && (
@@ -392,6 +575,124 @@ export default function AdminResources() {
         </main>
       )}
     </div>
+  );
+}
+
+function ForecastSummary({
+  forecast,
+  loading,
+  error,
+  note,
+  attempted,
+  hasHistory,
+  onRefresh,
+}: {
+  forecast: BusyDayForecast | null;
+  loading: boolean;
+  error: string | null;
+  note: string | null;
+  attempted: boolean;
+  hasHistory: boolean;
+  onRefresh: () => void;
+}) {
+  const points = useMemo(() => {
+    if (!forecast) return [];
+    return [...forecast.points]
+      .slice(0, 7)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [forecast]);
+
+  const formatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
+    []
+  );
+
+  const renderBadge = (label: BusyDayForecastPoint["label"]) => {
+    const base = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
+    if (label === "BUSY") return `${base} bg-rose-100 text-rose-700`;
+    if (label === "QUIET") return `${base} bg-sky-100 text-sky-700`;
+    return `${base} bg-emerald-100 text-emerald-700`;
+  };
+
+  const showEmptyState = !loading && !forecast && attempted && !error;
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Demand forecast</h3>
+          <p className="text-xs text-gray-500">
+            Next {forecast?.horizon_days ?? FORECAST_HORIZON_DAYS} days - {forecast?.model ?? "moving-average"}
+          </p>
+          {forecast?.usingFallback && (
+            <span className="mt-1 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+              Local fallback
+            </span>
+          )}
+        </div>
+        <button
+          className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          {loading ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-gray-600">Loading forecast...</p>}
+
+      {!loading && error && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+          {error}
+        </p>
+      )}
+
+      {!loading && note && (
+        <p className="mt-3 text-xs text-gray-600">{note}</p>
+      )}
+
+      {showEmptyState && !hasHistory && (
+        <p className="mt-3 text-sm text-gray-600">
+          Add bookings to build enough history for a forecast.
+        </p>
+      )}
+
+      {forecast && !loading && points.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="px-2 pb-2 font-medium">Date</th>
+                <th className="px-2 pb-2 font-medium">Label</th>
+                <th className="px-2 pb-2 font-medium">Busy %</th>
+                <th className="px-2 pb-2 font-medium">Expected bookings</th>
+              </tr>
+            </thead>
+            <tbody className="text-gray-800">
+              {points.map((point) => {
+                const date = new Date(`${point.date}T00:00:00`);
+                const percent = Math.round(point.busyProbability * 100);
+                return (
+                  <tr key={point.date} className="border-t border-gray-100">
+                    <td className="px-2 py-2">{formatter.format(date)}</td>
+                    <td className="px-2 py-2">
+                      <span className={renderBadge(point.label)}>{point.label}</span>
+                    </td>
+                    <td className="px-2 py-2 font-semibold">{percent}%</td>
+                    <td className="px-2 py-2">{point.expectedBookings.toFixed(1)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

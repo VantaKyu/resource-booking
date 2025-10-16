@@ -37,6 +37,29 @@ export interface Booking {
   canceled_at?: string | null;
 }
 
+export type BusyDayLabel = 'BUSY' | 'NORMAL' | 'QUIET';
+
+export interface BusyDayForecastPoint {
+  date: string;
+  expectedBookings: number;
+  busyProbability: number;
+  label: BusyDayLabel;
+}
+
+export interface BusyDayForecast {
+  generated_at: string;
+  horizon_days: number;
+  model: string;
+  points: BusyDayForecastPoint[];
+  notes?: string;
+  usingFallback?: boolean;
+}
+
+export interface BusyDayForecastParams {
+  horizon_days?: number;
+  kind?: ResourceKind | 'ALL';
+}
+
 export interface CreateBookingPayload {
   kind: ResourceKind;
   resource_id: number;
@@ -151,6 +174,18 @@ export function cancelBooking(id: number): Promise<Booking> {
   return http<Booking>(`/api/bookings/${id}/cancel`, {
     method: 'POST',
   });
+}
+
+// ---------- Analytics ----------
+export function getBusyDayForecast(params?: BusyDayForecastParams): Promise<BusyDayForecast> {
+  const url = new URL('/api/analytics/busy-days', BASE);
+  if (params?.horizon_days) {
+    url.searchParams.set('horizon_days', String(params.horizon_days));
+  }
+  if (params?.kind && params.kind !== 'ALL') {
+    url.searchParams.set('kind', params.kind);
+  }
+  return http<BusyDayForecast>(url.pathname + url.search);
 }
 
 // ---------- Resources ----------
