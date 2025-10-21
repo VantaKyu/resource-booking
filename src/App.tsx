@@ -15,7 +15,6 @@ import {
   Layers3,
   Filter,
   Download,
-  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -394,7 +393,16 @@ export default function App() {
             <TabsContent value="vehicles" className="mt-4">
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredVehicles.map((v) => (
-                  <Card key={v.id} className="hover:shadow-md transition-shadow">
+                  <Card
+                    key={v.id}
+                    onClick={() => startBooking("VEHICLE", v.id, v.name)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ")
+                        startBooking("VEHICLE", v.id, v.name);
+                    }}
+                    className="cursor-pointer transition-transform duration-200 hover:scale-[1.01] hover:shadow-xl hover:border-border focus-visible:ring-ring/50 focus-visible:ring-4"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
@@ -414,13 +422,15 @@ export default function App() {
                         </Badge>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
-                        <Button size="sm" onClick={() => startBooking("VEHICLE", v.id, v.name)}>
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startBooking("VEHICLE", v.id, v.name);
+                          }}
+                        >
                           <CalendarIcon className="h-4 w-4 mr-2" />
                           Book
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <QrCode className="h-4 w-4" />
-                          View QR
                         </Button>
                       </div>
                     </CardContent>
@@ -432,7 +442,16 @@ export default function App() {
             <TabsContent value="facilities" className="mt-4">
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredFacilities.map((f) => (
-                  <Card key={f.id} className="hover:shadow-md transition-shadow">
+                  <Card
+                    key={f.id}
+                    onClick={() => startBooking("FACILITY", f.id, f.name)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ")
+                        startBooking("FACILITY", f.id, f.name);
+                    }}
+                    className="cursor-pointer transition-transform duration-200 hover:scale-[1.01] hover:shadow-xl hover:border-border focus-visible:ring-ring/50 focus-visible:ring-4"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
@@ -450,12 +469,15 @@ export default function App() {
                         </Badge>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
-                        <Button size="sm" onClick={() => startBooking("FACILITY", f.id, f.name)}>
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startBooking("FACILITY", f.id, f.name);
+                          }}
+                        >
                           <CalendarIcon className="h-4 w-4 mr-2" />
                           Book
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          Details <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
                     </CardContent>
@@ -467,17 +489,29 @@ export default function App() {
             <TabsContent value="equipment" className="mt-4">
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredEquipment.map((e) => (
-                  <Card key={e.id} className="hover:shadow-md transition-shadow">
+                  <Card
+                    key={e.id}
+                    onClick={() => startBooking("EQUIPMENT", e.id, e.name)}
+                    tabIndex={0}
+                    onKeyDown={(eKey) => {
+                      if (eKey.key === "Enter" || eKey.key === " ")
+                        startBooking("EQUIPMENT", e.id, e.name);
+                    }}
+                    className="cursor-pointer transition-transform duration-200 hover:scale-[1.01] hover:shadow-xl hover:border-border focus-visible:ring-ring/50 focus-visible:ring-4"
+                  >
                     <CardContent className="p-4">
                       <h3 className="font-medium">{e.name}</h3>
                       <p className="text-sm text-muted-foreground">Total: {e.quantity}</p>
                       <div className="mt-4 flex items-center justify-between">
-                        <Button size="sm" onClick={() => startBooking("EQUIPMENT", e.id, e.name)}>
+                        <Button
+                          size="sm"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            startBooking("EQUIPMENT", e.id, e.name);
+                          }}
+                        >
                           <CalendarIcon className="h-4 w-4 mr-2" />
                           Book
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          Reserve
                         </Button>
                       </div>
                     </CardContent>
