@@ -8,13 +8,11 @@ import {
   Search,
   QrCode,
   Plus,
-  CheckCircle2,
   XCircle,
   Clock4,
   ClipboardList,
   Layers3,
   Filter,
-  Download,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,15 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+ 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api, type Booking, type BookingStatus, type Kind, type Resource } from "./lib/api";
 import { toast } from "sonner";
@@ -597,46 +587,9 @@ export default function App() {
                               </>
                             )}
 
-                            {status === "ONGOING" && (
-                              <Button size="sm" onClick={() => updateStatus(b.id, "SUCCESS")}>
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Finish
-                              </Button>
-                            )}
+                            
 
-                            {status === "SUCCESS" && (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button size="sm" variant="outline">
-                                    <Download className="h-4 w-4 mr-1" />
-                                    Slip
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Booking Slip (Preview)</DialogTitle>
-                                    <DialogDescription>
-                                      Printable trip ticket / handover slip will be generated here.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="text-sm">
-                                    <p>
-                                      <strong>ID:</strong> {b.id}
-                                    </p>
-                                    <p>
-                                      <strong>Resource:</strong> {b.resource_name}
-                                    </p>
-                                    <p>
-                                      <strong>When:</strong> {new Date(b.start_dt).toLocaleString()} —{" "}
-                                      {new Date(b.end_dt).toLocaleString()}
-                                    </p>
-                                  </div>
-                                  <DialogFooter>
-                                    <Button>Download PDF</Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            )}
+                            
                           </div>
                         </div>
                       </CardContent>
@@ -780,7 +733,7 @@ export default function App() {
 
             <div className="border-t pt-4 text-xs text-muted-foreground">
               <p>
-                Workflow preview: <strong>REQUEST</strong> → <strong>ONGOING</strong> (scan QR at pickup) →{" "}
+                Workflow preview: <strong>REQUEST</strong> → <strong>ONGOING</strong> →{" "}
                 <strong>SUCCESS</strong> (return) or <strong>CANCEL</strong>.
               </p>
             </div>
